@@ -29,8 +29,6 @@ type DetailModel struct {
 	textInput   textinput.Model // Text input for new items
 	message     string          // Temporary status message
 	confirmMsg  string          // Confirmation prompt
-	confirmYes  func()          // Action on 'y'
-	confirmNo   func()          // Action on 'n'
 	insertBelow bool            // For 'o' vs 'O'
 }
 
@@ -160,31 +158,28 @@ func (m DetailModel) updateConfirm(msg tea.Msg) (DetailModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "y", "Y":
-			// Confirm yes
+			// Confirm yes - save and exit
 			m.mode = DetailModeNormal
-			if m.confirmYes != nil {
-				m.confirmYes()
-				m.confirmYes = nil
-				m.confirmNo = nil
+			if err := task.SaveTask(m.task); err == nil {
+				m.modified = false
 			}
-			return m, nil
+			return m, func() tea.Msg {
+				return ConfirmResultMsg{Action: "save"}
+			}
 
 		case "n", "N":
-			// Confirm no
+			// Confirm no - discard and exit
 			m.mode = DetailModeNormal
-			if m.confirmNo != nil {
-				m.confirmNo()
-				m.confirmYes = nil
-				m.confirmNo = nil
+			return m, func() tea.Msg {
+				return ConfirmResultMsg{Action: "discard"}
 			}
-			return m, nil
 
 		case "c", "C", "esc":
-			// Cancel
+			// Cancel - stay in detail view
 			m.mode = DetailModeNormal
-			m.confirmYes = nil
-			m.confirmNo = nil
-			return m, nil
+			return m, func() tea.Msg {
+				return ConfirmResultMsg{Action: "cancel"}
+			}
 		}
 	}
 
@@ -280,6 +275,11 @@ type saveResultMsg struct {
 	err error
 }
 
+// ConfirmResultMsg is returned after confirmation dialog
+type ConfirmResultMsg struct {
+	Action string // "save", "discard", or "cancel"
+}
+
 // HandleSaveResult handles the save result message
 func (m *DetailModel) handleSaveResult(msg saveResultMsg) {
 	if msg.err != nil {
@@ -300,23 +300,15 @@ func (m DetailModel) IsNormalMode() bool {
 	return m.mode == DetailModeNormal
 }
 
-// SetConfirmUnsaved sets up the unsaved changes confirmation
-func (m *DetailModel) SetConfirmUnsaved(onSave func(), onDiscard func()) {
+// IsConfirmMode returns whether the detail view is in confirm mode
+func (m DetailModel) IsConfirmMode() bool {
+	return m.mode == DetailModeConfirm
+}
+
+// ShowUnsavedConfirmation shows the unsaved changes confirmation
+func (m *DetailModel) ShowUnsavedConfirmation() {
 	m.mode = DetailModeConfirm
 	m.confirmMsg = "Unsaved changes. Save? (y/n/c)"
-	m.confirmYes = func() {
-		if err := task.SaveTask(m.task); err == nil {
-			m.modified = false
-		}
-		if onSave != nil {
-			onSave()
-		}
-	}
-	m.confirmNo = func() {
-		if onDiscard != nil {
-			onDiscard()
-		}
-	}
 }
 
 // View renders the detail view

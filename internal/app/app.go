@@ -18,25 +18,23 @@ const (
 
 // AppModel is the top-level model that manages view switching
 type AppModel struct {
-	view             View
-	board            ui.BoardModel
-	detail           ui.DetailModel
-	columns          []string
-	shouldExitDetail bool     // Flag to exit detail view
-	warnings         []string // Startup warnings
-	showHelp         bool     // Show help overlay
-	width            int      // Terminal width
-	height           int      // Terminal height
+	view     View
+	board    ui.BoardModel
+	detail   ui.DetailModel
+	columns  []string
+	warnings []string // Startup warnings
+	showHelp bool     // Show help overlay
+	width    int      // Terminal width
+	height   int      // Terminal height
 }
 
 // NewAppModel creates a new app model
 func NewAppModel(columns []string, tasks []*task.Task, warnings []string) AppModel {
 	return AppModel{
-		view:             ViewBoard,
-		board:            ui.NewBoardModel(columns, tasks, warnings),
-		columns:          columns,
-		shouldExitDetail: false,
-		warnings:         warnings,
+		view:     ViewBoard,
+		board:    ui.NewBoardModel(columns, tasks, warnings),
+		columns:  columns,
+		warnings: warnings,
 	}
 }
 
@@ -116,41 +114,38 @@ func (m AppModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.board = updatedBoard.(ui.BoardModel)
 	}
 
-	// Update detail model first
-	updatedDetail, cmd := m.detail.Update(msg)
-	m.detail = updatedDetail
-
-	// Check for Esc key to return to board view (after detail has processed it)
+	// Check for Esc key to return to board view (before detail processes it)
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.String() == "esc" {
 			// Only handle Esc if we're in normal mode (not in confirm/input mode)
 			if m.detail.IsNormalMode() {
 				// Check for unsaved changes
 				if m.detail.HasUnsavedChanges() {
-					// Set up confirmation dialog
-					m.detail.SetConfirmUnsaved(
-						func() {
-							// On save - will be handled by setting flag
-							m.shouldExitDetail = true
-						},
-						func() {
-							// On discard - will be handled by setting flag
-							m.shouldExitDetail = true
-						},
-					)
-					return m, cmd
+					// Show confirmation dialog
+					m.detail.ShowUnsavedConfirmation()
+					return m, nil
 				}
 				// No unsaved changes, go back
 				m.view = ViewBoard
-				return m, cmd
+				return m, nil
 			}
 		}
 	}
 
-	// Check if we should exit detail view (after confirmation)
-	if m.shouldExitDetail && m.detail.IsNormalMode() {
-		m.shouldExitDetail = false
-		m.view = ViewBoard
+	// Update detail model
+	updatedDetail, cmd := m.detail.Update(msg)
+	m.detail = updatedDetail
+
+	// Handle confirmation result
+	if confirmMsg, ok := msg.(ui.ConfirmResultMsg); ok {
+		switch confirmMsg.Action {
+		case "save", "discard":
+			// Exit to board on save or discard
+			m.view = ViewBoard
+		case "cancel":
+			// Stay in detail view
+		}
+		return m, cmd
 	}
 
 	return m, cmd
