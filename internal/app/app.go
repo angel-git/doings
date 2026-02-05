@@ -17,18 +17,20 @@ const (
 
 // AppModel is the top-level model that manages view switching
 type AppModel struct {
-	view    View
-	board   ui.BoardModel
-	detail  ui.DetailModel
-	columns []string
+	view             View
+	board            ui.BoardModel
+	detail           ui.DetailModel
+	columns          []string
+	shouldExitDetail bool // Flag to exit detail view
 }
 
 // NewAppModel creates a new app model
 func NewAppModel(columns []string, tasks []*task.Task) AppModel {
 	return AppModel{
-		view:    ViewBoard,
-		board:   ui.NewBoardModel(columns, tasks),
-		columns: columns,
+		view:             ViewBoard,
+		board:            ui.NewBoardModel(columns, tasks),
+		columns:          columns,
+		shouldExitDetail: false,
 	}
 }
 
@@ -78,23 +80,49 @@ func (m AppModel) updateBoard(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateDetail handles updates when detail view is active
 func (m AppModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Check for Esc key to return to board view
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "esc" {
-			m.view = ViewBoard
-			return m, nil
-		}
-	}
-
 	// Pass window size messages to board view too
 	if windowMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		updatedBoard, _ := m.board.Update(windowMsg)
 		m.board = updatedBoard.(ui.BoardModel)
 	}
 
-	// Update detail model
+	// Update detail model first
 	updatedDetail, cmd := m.detail.Update(msg)
 	m.detail = updatedDetail
+
+	// Check for Esc key to return to board view (after detail has processed it)
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.String() == "esc" {
+			// Only handle Esc if we're in normal mode (not in confirm/input mode)
+			if m.detail.IsNormalMode() {
+				// Check for unsaved changes
+				if m.detail.HasUnsavedChanges() {
+					// Set up confirmation dialog
+					m.detail.SetConfirmUnsaved(
+						func() {
+							// On save - will be handled by setting flag
+							m.shouldExitDetail = true
+						},
+						func() {
+							// On discard - will be handled by setting flag
+							m.shouldExitDetail = true
+						},
+					)
+					return m, cmd
+				}
+				// No unsaved changes, go back
+				m.view = ViewBoard
+				return m, cmd
+			}
+		}
+	}
+
+	// Check if we should exit detail view (after confirmation)
+	if m.shouldExitDetail && m.detail.IsNormalMode() {
+		m.shouldExitDetail = false
+		m.view = ViewBoard
+	}
+
 	return m, cmd
 }
 
