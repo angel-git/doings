@@ -1,11 +1,23 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
+	"doings/internal/config"
 	"doings/internal/task"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+// Mode represents the current interaction mode
+type Mode int
+
+const (
+	ModeNormal Mode = iota
+	ModeInput
+	ModeConfirm
 )
 
 // Cursor tracks the current position on the board
@@ -16,11 +28,15 @@ type Cursor struct {
 
 // BoardModel represents the main board view
 type BoardModel struct {
-	columns []string                // Column names from config
-	tasks   map[string][]*task.Task // Tasks grouped by status
-	cursor  Cursor                  // Current position
-	width   int                     // Terminal width
-	height  int                     // Terminal height
+	columns       []string                // Column names from config
+	tasks         map[string][]*task.Task // Tasks grouped by status
+	cursor        Cursor                  // Current position
+	width         int                     // Terminal width
+	height        int                     // Terminal height
+	mode          Mode                    // Current mode
+	textInput     textinput.Model         // Text input for new tasks
+	confirmMsg    string                  // Confirmation message
+	confirmAction func() tea.Cmd          // Action to perform on confirmation
 }
 
 // NewBoardModel creates a new board model
@@ -31,12 +47,20 @@ func NewBoardModel(columns []string, tasks []*task.Task) BoardModel {
 		tasksByStatus[t.Status] = append(tasksByStatus[t.Status], t)
 	}
 
+	// Initialize text input
+	ti := textinput.New()
+	ti.Placeholder = "Task title..."
+	ti.CharLimit = 100
+	ti.Width = 50
+
 	return BoardModel{
-		columns: columns,
-		tasks:   tasksByStatus,
-		cursor:  Cursor{Column: 0, Row: 0},
-		width:   80,
-		height:  24,
+		columns:   columns,
+		tasks:     tasksByStatus,
+		cursor:    Cursor{Column: 0, Row: 0},
+		width:     80,
+		height:    24,
+		mode:      ModeNormal,
+		textInput: ti,
 	}
 }
 
@@ -47,6 +71,24 @@ func (m BoardModel) Init() tea.Cmd {
 
 // Update handles messages and updates the model
 func (m BoardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle reload message
+	if reload, ok := msg.(reloadMsg); ok {
+		m.handleReload(reload)
+		return m, nil
+	}
+
+	switch m.mode {
+	case ModeInput:
+		return m.updateInput(msg)
+	case ModeConfirm:
+		return m.updateConfirm(msg)
+	default:
+		return m.updateNormal(msg)
+	}
+}
+
+// updateNormal handles input in normal mode
+func (m BoardModel) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -54,21 +96,18 @@ func (m BoardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "h", "left":
-			// Move left
 			if m.cursor.Column > 0 {
 				m.cursor.Column--
 				m.adjustCursorRow()
 			}
 
 		case "l", "right":
-			// Move right
 			if m.cursor.Column < len(m.columns)-1 {
 				m.cursor.Column++
 				m.adjustCursorRow()
 			}
 
 		case "j", "down":
-			// Move down
 			columnName := m.columns[m.cursor.Column]
 			tasksInColumn := m.tasks[columnName]
 			if m.cursor.Row < len(tasksInColumn)-1 {
@@ -76,10 +115,28 @@ func (m BoardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "k", "up":
-			// Move up
 			if m.cursor.Row > 0 {
 				m.cursor.Row--
 			}
+
+		case "H":
+			// Move task left
+			return m, m.moveTaskLeft()
+
+		case "L":
+			// Move task right
+			return m, m.moveTaskRight()
+
+		case "n":
+			// Create new task
+			m.mode = ModeInput
+			m.textInput.Reset()
+			m.textInput.Focus()
+			return m, textinput.Blink
+
+		case "d":
+			// Delete task
+			return m, m.confirmDelete()
 		}
 
 	case tea.WindowSizeMsg:
@@ -90,21 +147,187 @@ func (m BoardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateInput handles input in text input mode
+func (m BoardModel) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			// Create task
+			title := m.textInput.Value()
+			if title != "" {
+				cmd = m.createTask(title)
+			}
+			m.mode = ModeNormal
+			m.textInput.Blur()
+			return m, cmd
+
+		case tea.KeyEsc:
+			// Cancel
+			m.mode = ModeNormal
+			m.textInput.Blur()
+			return m, nil
+		}
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+// updateConfirm handles input in confirm mode
+func (m BoardModel) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "y", "Y":
+			// Confirm
+			m.mode = ModeNormal
+			if m.confirmAction != nil {
+				return m, m.confirmAction()
+			}
+			return m, nil
+
+		case "n", "N", "esc":
+			// Cancel
+			m.mode = ModeNormal
+			m.confirmAction = nil
+			return m, nil
+		}
+	}
+
+	return m, nil
+}
+
 // adjustCursorRow adjusts the row when switching columns
 func (m *BoardModel) adjustCursorRow() {
 	columnName := m.columns[m.cursor.Column]
 	tasksInColumn := m.tasks[columnName]
 
-	// If column is empty, set row to 0
 	if len(tasksInColumn) == 0 {
 		m.cursor.Row = 0
 		return
 	}
 
-	// If current row is beyond the tasks in this column, adjust
 	if m.cursor.Row >= len(tasksInColumn) {
 		m.cursor.Row = len(tasksInColumn) - 1
 	}
+}
+
+// moveTaskLeft moves the current task to the previous column
+func (m *BoardModel) moveTaskLeft() tea.Cmd {
+	if m.cursor.Column == 0 {
+		return nil
+	}
+
+	columnName := m.columns[m.cursor.Column]
+	tasksInColumn := m.tasks[columnName]
+	if len(tasksInColumn) == 0 {
+		return nil
+	}
+
+	currentTask := tasksInColumn[m.cursor.Row]
+	newStatus := m.columns[m.cursor.Column-1]
+
+	return m.moveTask(currentTask, newStatus)
+}
+
+// moveTaskRight moves the current task to the next column
+func (m *BoardModel) moveTaskRight() tea.Cmd {
+	if m.cursor.Column >= len(m.columns)-1 {
+		return nil
+	}
+
+	columnName := m.columns[m.cursor.Column]
+	tasksInColumn := m.tasks[columnName]
+	if len(tasksInColumn) == 0 {
+		return nil
+	}
+
+	currentTask := tasksInColumn[m.cursor.Row]
+	newStatus := m.columns[m.cursor.Column+1]
+
+	return m.moveTask(currentTask, newStatus)
+}
+
+// moveTask moves a task to a new status
+func (m *BoardModel) moveTask(t *task.Task, newStatus string) tea.Cmd {
+	t.Status = newStatus
+	if err := task.SaveTask(t); err != nil {
+		return nil // TODO: show error
+	}
+
+	return m.reloadTasks()
+}
+
+// createTask creates a new task
+func (m *BoardModel) createTask(title string) tea.Cmd {
+	// Create task in first column (TODO)
+	status := m.columns[0]
+	_, err := task.CreateTask(config.TasksDir, title, status)
+	if err != nil {
+		return nil // TODO: show error
+	}
+
+	// Move cursor to first column
+	m.cursor.Column = 0
+	m.cursor.Row = 0
+
+	return m.reloadTasks()
+}
+
+// confirmDelete shows delete confirmation
+func (m *BoardModel) confirmDelete() tea.Cmd {
+	columnName := m.columns[m.cursor.Column]
+	tasksInColumn := m.tasks[columnName]
+	if len(tasksInColumn) == 0 {
+		return nil
+	}
+
+	currentTask := tasksInColumn[m.cursor.Row]
+	m.confirmMsg = fmt.Sprintf("Delete '%s'? (y/n)", currentTask.Title)
+	m.mode = ModeConfirm
+
+	m.confirmAction = func() tea.Cmd {
+		if err := task.DeleteTask(currentTask); err != nil {
+			return nil // TODO: show error
+		}
+
+		// Adjust cursor after deletion
+		if m.cursor.Row > 0 {
+			m.cursor.Row--
+		}
+
+		return m.reloadTasks()
+	}
+
+	return nil
+}
+
+// reloadTasks reloads all tasks from disk
+func (m *BoardModel) reloadTasks() tea.Cmd {
+	return func() tea.Msg {
+		tasks, _ := task.ListTasks(config.TasksDir)
+		return reloadMsg{tasks: tasks}
+	}
+}
+
+// reloadMsg is sent when tasks need to be reloaded
+type reloadMsg struct {
+	tasks []*task.Task
+}
+
+// handleReload handles the reload message
+func (m *BoardModel) handleReload(msg reloadMsg) {
+	// Regroup tasks by status
+	m.tasks = make(map[string][]*task.Task)
+	for _, t := range msg.tasks {
+		m.tasks[t.Status] = append(m.tasks[t.Status], t)
+	}
+
+	// Adjust cursor if needed
+	m.adjustCursorRow()
 }
 
 // renderTask renders a single task with appropriate styling
@@ -187,7 +410,15 @@ func (m BoardModel) View() string {
 	board := lipgloss.JoinHorizontal(lipgloss.Top, columns...)
 
 	// Add help bar at bottom
-	help := m.renderHelp()
+	var help string
+	switch m.mode {
+	case ModeInput:
+		help = HelpStyle.Render("Enter task title (Enter to confirm, Esc to cancel):\n" + m.textInput.View())
+	case ModeConfirm:
+		help = HelpStyle.Render(m.confirmMsg)
+	default:
+		help = m.renderHelp()
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, board, help)
 }

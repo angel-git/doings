@@ -92,9 +92,12 @@ const (
 - `internal/ui/board.go` - Add modes and handlers
 
 ## Definition of Done
-- [ ] `H`/`L` moves task between columns
-- [ ] Status change is saved to file
-- [ ] `n` creates new task with text input
-- [ ] `d` deletes task with confirmation
-- [ ] Cancelling input/confirm returns to normal mode
-- [ ] Edge cases handled (empty columns, first/last column)
+- [x] `H`/`L` moves task between columns
+- [x] Status change is saved to file
+- [x] `n` creates new task with text input
+- [x] `d` deletes task with confirmation
+- [x] Cancelling input/confirm returns to normal mode
+- [x] Edge cases handled (empty columns, first/last column)
+
+## Status
+**COMPLETED** - All tasks finished successfully on Thu Feb 05 2026
