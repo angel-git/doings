@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"doings/internal/app"
 	"doings/internal/config"
 	"doings/internal/task"
-	"doings/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// Create and run the Bubble Tea program
-	p := tea.NewProgram(ui.NewBoardModel(cfg.Board.Columns, tasks))
+	p := tea.NewProgram(app.NewAppModel(cfg.Board.Columns, tasks))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

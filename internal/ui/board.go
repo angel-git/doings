@@ -330,6 +330,22 @@ func (m *BoardModel) handleReload(msg reloadMsg) {
 	m.adjustCursorRow()
 }
 
+// GetSelectedTask returns the currently selected task, or nil if none
+func (m BoardModel) GetSelectedTask() *task.Task {
+	columnName := m.columns[m.cursor.Column]
+	tasksInColumn := m.tasks[columnName]
+
+	if len(tasksInColumn) == 0 {
+		return nil
+	}
+
+	if m.cursor.Row >= len(tasksInColumn) {
+		return nil
+	}
+
+	return tasksInColumn[m.cursor.Row]
+}
+
 // renderTask renders a single task with appropriate styling
 func (m BoardModel) renderTask(t *task.Task, selected bool) string {
 	style := TaskStyle
