@@ -150,3 +150,47 @@ func parseChecklist(lines []string) []CheckItem {
 
 	return items
 }
+
+// ToMarkdown converts the Task back to markdown format
+func (t *Task) ToMarkdown() string {
+	var b strings.Builder
+
+	// Title
+	b.WriteString("# ")
+	b.WriteString(t.Title)
+	b.WriteString("\n")
+
+	// Status
+	b.WriteString("status = \"")
+	b.WriteString(t.Status)
+	b.WriteString("\"\n")
+
+	// Description
+	b.WriteString("---\n")
+	if t.Description != "" {
+		b.WriteString(t.Description)
+		b.WriteString("\n")
+	}
+	b.WriteString("---\n")
+
+	// Checklist
+	for _, item := range t.Checklist {
+		// Add indentation
+		for i := 0; i < item.Indent; i++ {
+			b.WriteString("    ")
+		}
+
+		// Add checkbox
+		if item.Checked {
+			b.WriteString("- [x] ")
+		} else {
+			b.WriteString("- [ ] ")
+		}
+
+		// Add text
+		b.WriteString(item.Text)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
