@@ -49,8 +49,12 @@ func main() {
 		}
 	}
 
-	// Create and run the Bubble Tea program
-	p := tea.NewProgram(app.NewAppModel(cfg.Board.Columns, tasks, warnings))
+	// Create and run the Bubble Tea program with alternate screen
+	p := tea.NewProgram(
+		app.NewAppModel(cfg.Board.Columns, tasks, warnings),
+		tea.WithAltScreen(),       // Use alternate screen buffer
+		tea.WithMouseCellMotion(), // Enable mouse support (optional)
+	)
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
