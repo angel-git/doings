@@ -13,6 +13,7 @@ type View int
 const (
 	ViewBoard View = iota
 	ViewDetail
+	ViewHelp
 )
 
 // AppModel is the top-level model that manages view switching
@@ -21,16 +22,21 @@ type AppModel struct {
 	board            ui.BoardModel
 	detail           ui.DetailModel
 	columns          []string
-	shouldExitDetail bool // Flag to exit detail view
+	shouldExitDetail bool     // Flag to exit detail view
+	warnings         []string // Startup warnings
+	showHelp         bool     // Show help overlay
+	width            int      // Terminal width
+	height           int      // Terminal height
 }
 
 // NewAppModel creates a new app model
-func NewAppModel(columns []string, tasks []*task.Task) AppModel {
+func NewAppModel(columns []string, tasks []*task.Task, warnings []string) AppModel {
 	return AppModel{
 		view:             ViewBoard,
-		board:            ui.NewBoardModel(columns, tasks),
+		board:            ui.NewBoardModel(columns, tasks, warnings),
 		columns:          columns,
 		shouldExitDetail: false,
+		warnings:         warnings,
 	}
 }
 
@@ -41,6 +47,30 @@ func (m AppModel) Init() tea.Cmd {
 
 // Update handles messages and routes them to the appropriate view
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle window size globally
+	if windowMsg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = windowMsg.Width
+		m.height = windowMsg.Height
+	}
+
+	// Handle help toggle globally
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.String() == "?" {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+	}
+
+	// If help is showing, any other key closes it
+	if m.showHelp {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			if keyMsg.String() != "?" {
+				m.showHelp = false
+				return m, nil
+			}
+		}
+	}
+
 	switch m.view {
 	case ViewBoard:
 		return m.updateBoard(msg)
@@ -128,12 +158,21 @@ func (m AppModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the current view
 func (m AppModel) View() string {
+	var baseView string
+
 	switch m.view {
 	case ViewBoard:
-		return m.board.View()
+		baseView = m.board.View()
 	case ViewDetail:
-		return m.detail.View()
+		baseView = m.detail.View()
 	default:
-		return ""
+		baseView = ""
 	}
+
+	// Overlay help screen if showing
+	if m.showHelp {
+		return ui.RenderHelpScreen(m.width, m.height)
+	}
+
+	return baseView
 }

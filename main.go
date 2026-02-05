@@ -27,16 +27,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load tasks
+	// Load tasks and collect warnings
 	tasks, errs := task.ListTasks(config.TasksDir)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			log.Printf("Warning: %v", err)
+	var warnings []string
+
+	// Add parse errors
+	for _, err := range errs {
+		warnings = append(warnings, err.Error())
+	}
+
+	// Check for tasks with invalid status
+	validStatuses := make(map[string]bool)
+	for _, col := range cfg.Board.Columns {
+		validStatuses[col] = true
+	}
+
+	for _, t := range tasks {
+		if !validStatuses[t.Status] {
+			warnings = append(warnings,
+				"Task \""+t.Title+"\" has unknown status \""+t.Status+"\"")
 		}
 	}
 
 	// Create and run the Bubble Tea program
-	p := tea.NewProgram(app.NewAppModel(cfg.Board.Columns, tasks))
+	p := tea.NewProgram(app.NewAppModel(cfg.Board.Columns, tasks, warnings))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

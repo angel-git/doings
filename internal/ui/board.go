@@ -37,10 +37,13 @@ type BoardModel struct {
 	textInput     textinput.Model         // Text input for new tasks
 	confirmMsg    string                  // Confirmation message
 	confirmAction func() tea.Cmd          // Action to perform on confirmation
+	warnings      []string                // Startup warnings
+	showWarnings  bool                    // Whether to show warnings
+	statusMsg     string                  // Temporary status message
 }
 
 // NewBoardModel creates a new board model
-func NewBoardModel(columns []string, tasks []*task.Task) BoardModel {
+func NewBoardModel(columns []string, tasks []*task.Task, warnings []string) BoardModel {
 	// Group tasks by status
 	tasksByStatus := make(map[string][]*task.Task)
 	for _, t := range tasks {
@@ -54,13 +57,15 @@ func NewBoardModel(columns []string, tasks []*task.Task) BoardModel {
 	ti.Width = 50
 
 	return BoardModel{
-		columns:   columns,
-		tasks:     tasksByStatus,
-		cursor:    Cursor{Column: 0, Row: 0},
-		width:     80,
-		height:    24,
-		mode:      ModeNormal,
-		textInput: ti,
+		columns:      columns,
+		tasks:        tasksByStatus,
+		cursor:       Cursor{Column: 0, Row: 0},
+		width:        80,
+		height:       24,
+		mode:         ModeNormal,
+		textInput:    ti,
+		warnings:     warnings,
+		showWarnings: len(warnings) > 0,
 	}
 }
 
@@ -91,6 +96,12 @@ func (m BoardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m BoardModel) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// If showing warnings, any key dismisses them
+		if m.showWarnings {
+			m.showWarnings = false
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -263,16 +274,25 @@ func (m *BoardModel) moveTask(t *task.Task, newStatus string) tea.Cmd {
 
 // createTask creates a new task
 func (m *BoardModel) createTask(title string) tea.Cmd {
+	// Validate title is not empty
+	title = strings.TrimSpace(title)
+	if title == "" {
+		m.statusMsg = "Error: Task title cannot be empty"
+		return nil
+	}
+
 	// Create task in first column (TODO)
 	status := m.columns[0]
 	_, err := task.CreateTask(config.TasksDir, title, status)
 	if err != nil {
-		return nil // TODO: show error
+		m.statusMsg = "Error creating task: " + err.Error()
+		return nil
 	}
 
 	// Move cursor to first column
 	m.cursor.Column = 0
 	m.cursor.Row = 0
+	m.statusMsg = "Task created"
 
 	return m.reloadTasks()
 }
@@ -352,7 +372,18 @@ func (m BoardModel) renderTask(t *task.Task, selected bool) string {
 	if selected {
 		style = SelectedTaskStyle
 	}
-	return style.Render(t.Title)
+
+	// Truncate title if too long
+	title := t.Title
+	maxLen := m.getColumnWidth() - 4 // Account for padding
+	if maxLen < 10 {
+		maxLen = 10
+	}
+	if len(title) > maxLen {
+		title = title[:maxLen-3] + "..."
+	}
+
+	return style.Render(title)
 }
 
 // renderColumn renders a single column with its tasks
@@ -363,22 +394,64 @@ func (m BoardModel) renderColumn(colIndex int) string {
 	// Calculate column width based on terminal width
 	columnWidth := m.getColumnWidth()
 
-	// Title
-	title := ColumnTitleStyle.Width(columnWidth).Render(columnName)
+	// Title with task count
+	titleText := fmt.Sprintf("%s (%d)", columnName, len(tasksInColumn))
+	title := ColumnTitleStyle.Width(columnWidth).Render(titleText)
 
 	// Tasks
 	var taskLines []string
+	maxVisibleTasks := 15 // Limit visible tasks
+
 	if len(tasksInColumn) == 0 {
 		taskLines = append(taskLines, TaskStyle.Width(columnWidth).Render("(empty)"))
 	} else {
-		for i, t := range tasksInColumn {
+		// Show tasks with simple truncation if too many
+		startIdx := 0
+		endIdx := len(tasksInColumn)
+
+		// If too many tasks, show around cursor
+		if colIndex == m.cursor.Column && len(tasksInColumn) > maxVisibleTasks {
+			startIdx = m.cursor.Row - maxVisibleTasks/2
+			if startIdx < 0 {
+				startIdx = 0
+			}
+			endIdx = startIdx + maxVisibleTasks
+			if endIdx > len(tasksInColumn) {
+				endIdx = len(tasksInColumn)
+				startIdx = endIdx - maxVisibleTasks
+				if startIdx < 0 {
+					startIdx = 0
+				}
+			}
+		} else if len(tasksInColumn) > maxVisibleTasks {
+			endIdx = maxVisibleTasks
+		}
+
+		// Show indicator if there are more tasks above
+		if startIdx > 0 {
+			taskLines = append(taskLines, lipgloss.NewStyle().
+				Width(columnWidth).
+				Foreground(lipgloss.Color("240")).
+				Render("  ↑ "+fmt.Sprintf("%d more", startIdx)))
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			t := tasksInColumn[i]
 			selected := colIndex == m.cursor.Column && i == m.cursor.Row
 			taskLine := m.renderTask(t, selected)
 			taskLines = append(taskLines, lipgloss.NewStyle().Width(columnWidth).Render(taskLine))
 		}
+
+		// Show indicator if there are more tasks below
+		if endIdx < len(tasksInColumn) {
+			taskLines = append(taskLines, lipgloss.NewStyle().
+				Width(columnWidth).
+				Foreground(lipgloss.Color("240")).
+				Render("  ↓ "+fmt.Sprintf("%d more", len(tasksInColumn)-endIdx)))
+		}
 	}
 
-	// Add empty lines to fill column height
+	// Add empty lines to fill column height if needed
 	minHeight := 10
 	for len(taskLines) < minHeight {
 		taskLines = append(taskLines, strings.Repeat(" ", columnWidth))
@@ -410,6 +483,38 @@ func (m BoardModel) getColumnWidth() int {
 
 // renderHelp renders the help/status bar
 func (m BoardModel) renderHelp() string {
+	// Show warnings if present
+	if m.showWarnings && len(m.warnings) > 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("208")).
+			Bold(true).
+			Padding(1, 0)
+
+		var warningText strings.Builder
+		for _, w := range m.warnings {
+			warningText.WriteString("⚠ ")
+			warningText.WriteString(w)
+			warningText.WriteString("\n")
+		}
+		warningText.WriteString("\nPress any key to continue...")
+
+		return warningStyle.Render(warningText.String())
+	}
+
+	// Show status message if present
+	if m.statusMsg != "" {
+		return HelpStyle.Render(m.statusMsg + " | hjkl/arrows: navigate | n: new | d: delete | Enter: open | H/L: move | q: quit")
+	}
+
+	// Check if no tasks exist
+	totalTasks := 0
+	for _, tasks := range m.tasks {
+		totalTasks += len(tasks)
+	}
+	if totalTasks == 0 {
+		return HelpStyle.Render("No tasks yet. Press 'n' to create your first task | q: quit")
+	}
+
 	help := "hjkl/arrows: navigate | n: new | d: delete | Enter: open | H/L: move | q: quit"
 	return HelpStyle.Render(help)
 }

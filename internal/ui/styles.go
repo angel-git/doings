@@ -5,29 +5,52 @@ import (
 )
 
 var (
+	// Color palette
+	PrimaryColor   = lipgloss.Color("62")  // Teal/purple
+	AccentColor    = lipgloss.Color("205") // Pink
+	SuccessColor   = lipgloss.Color("42")  // Green
+	WarningColor   = lipgloss.Color("208") // Orange
+	ErrorColor     = lipgloss.Color("196") // Red
+	MutedColor     = lipgloss.Color("240") // Gray
+	TextColor      = lipgloss.Color("252") // Light gray
+	HighlightColor = lipgloss.Color("230") // Yellow
+
 	// Column styles
 	ColumnStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(PrimaryColor).
 			Padding(0, 1)
 
 	ColumnTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("205")).
+				Foreground(AccentColor).
 				Align(lipgloss.Center)
 
 	// Task styles
 	TaskStyle = lipgloss.NewStyle().
-			Padding(0, 1)
+			Padding(0, 1).
+			Foreground(TextColor)
 
 	SelectedTaskStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
+				Background(PrimaryColor).
+				Foreground(HighlightColor).
 				Bold(true)
 
 	// Help/status bar
 	HelpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
+			Foreground(MutedColor).
 			Padding(1, 0)
+
+	// Error/Warning styles
+	ErrorStyle = lipgloss.NewStyle().
+			Foreground(ErrorColor).
+			Bold(true)
+
+	WarningStyle = lipgloss.NewStyle().
+			Foreground(WarningColor).
+			Bold(true)
+
+	SuccessStyle = lipgloss.NewStyle().
+			Foreground(SuccessColor)
 )
