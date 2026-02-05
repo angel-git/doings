@@ -1,11 +1,11 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"doings/internal/task"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Cursor tracks the current position on the board
@@ -107,45 +107,87 @@ func (m *BoardModel) adjustCursorRow() {
 	}
 }
 
-// View renders the board
-func (m BoardModel) View() string {
-	var b strings.Builder
-
-	b.WriteString("Terminal Task Board\n")
-	b.WriteString("===================\n\n")
-
-	// Show columns
-	b.WriteString("Columns: ")
-	for i, col := range m.columns {
-		if i == m.cursor.Column {
-			b.WriteString("[" + col + "] ")
-		} else {
-			b.WriteString(col + " ")
-		}
+// renderTask renders a single task with appropriate styling
+func (m BoardModel) renderTask(t *task.Task, selected bool) string {
+	style := TaskStyle
+	if selected {
+		style = SelectedTaskStyle
 	}
-	b.WriteString("\n\n")
+	return style.Render(t.Title)
+}
 
-	// Show current column tasks
-	currentColumn := m.columns[m.cursor.Column]
-	tasksInColumn := m.tasks[currentColumn]
+// renderColumn renders a single column with its tasks
+func (m BoardModel) renderColumn(colIndex int) string {
+	columnName := m.columns[colIndex]
+	tasksInColumn := m.tasks[columnName]
 
-	b.WriteString(fmt.Sprintf("Column: %s (%d tasks)\n", currentColumn, len(tasksInColumn)))
-	b.WriteString("---\n")
+	// Calculate column width based on terminal width
+	columnWidth := m.getColumnWidth()
 
+	// Title
+	title := ColumnTitleStyle.Width(columnWidth).Render(columnName)
+
+	// Tasks
+	var taskLines []string
 	if len(tasksInColumn) == 0 {
-		b.WriteString("  (empty)\n")
+		taskLines = append(taskLines, TaskStyle.Width(columnWidth).Render("(empty)"))
 	} else {
 		for i, t := range tasksInColumn {
-			if i == m.cursor.Row {
-				b.WriteString(fmt.Sprintf("> %s\n", t.Title))
-			} else {
-				b.WriteString(fmt.Sprintf("  %s\n", t.Title))
-			}
+			selected := colIndex == m.cursor.Column && i == m.cursor.Row
+			taskLine := m.renderTask(t, selected)
+			taskLines = append(taskLines, lipgloss.NewStyle().Width(columnWidth).Render(taskLine))
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString("Controls: hjkl/arrows to navigate | q to quit\n")
+	// Add empty lines to fill column height
+	minHeight := 10
+	for len(taskLines) < minHeight {
+		taskLines = append(taskLines, strings.Repeat(" ", columnWidth))
+	}
 
-	return b.String()
+	// Combine title and tasks
+	content := title + "\n" + strings.Join(taskLines, "\n")
+
+	// Apply column style
+	return ColumnStyle.Width(columnWidth).Render(content)
+}
+
+// getColumnWidth calculates the width for each column
+func (m BoardModel) getColumnWidth() int {
+	if len(m.columns) == 0 {
+		return 20
+	}
+
+	// Account for borders and padding (roughly 4 chars per column border)
+	borderOverhead := len(m.columns) * 4
+	availableWidth := m.width - borderOverhead - 2
+
+	if availableWidth < len(m.columns)*15 {
+		return 15 // Minimum width
+	}
+
+	return availableWidth / len(m.columns)
+}
+
+// renderHelp renders the help/status bar
+func (m BoardModel) renderHelp() string {
+	help := "hjkl/arrows: navigate | n: new | d: delete | Enter: open | H/L: move | q: quit"
+	return HelpStyle.Render(help)
+}
+
+// View renders the board
+func (m BoardModel) View() string {
+	// Render all columns
+	var columns []string
+	for i := range m.columns {
+		columns = append(columns, m.renderColumn(i))
+	}
+
+	// Place columns side by side
+	board := lipgloss.JoinHorizontal(lipgloss.Top, columns...)
+
+	// Add help bar at bottom
+	help := m.renderHelp()
+
+	return lipgloss.JoinVertical(lipgloss.Left, board, help)
 }

@@ -87,9 +87,12 @@ func (m BoardModel) renderHelp() string
 - `internal/ui/board.go` - Update View method
 
 ## Definition of Done
-- [ ] Board displays columns horizontally
-- [ ] Tasks appear in their respective columns
-- [ ] Selected task is visually distinct
-- [ ] Terminal resize is handled
-- [ ] Help bar shows key bindings
-- [ ] Layout looks clean and readable
+- [x] Board displays columns horizontally
+- [x] Tasks appear in their respective columns
+- [x] Selected task is visually distinct
+- [x] Terminal resize is handled
+- [x] Help bar shows key bindings
+- [x] Layout looks clean and readable
+
+## Status
+**COMPLETED** - All tasks finished successfully on Thu Feb 05 2026
