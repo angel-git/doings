@@ -28,18 +28,19 @@ type Cursor struct {
 
 // BoardModel represents the main board view
 type BoardModel struct {
-	columns       []string                // Column names from config
-	tasks         map[string][]*task.Task // Tasks grouped by status
-	cursor        Cursor                  // Current position
-	width         int                     // Terminal width
-	height        int                     // Terminal height
-	mode          Mode                    // Current mode
-	textInput     textinput.Model         // Text input for new tasks
-	confirmMsg    string                  // Confirmation message
-	confirmAction func() tea.Cmd          // Action to perform on confirmation
-	warnings      []string                // Startup warnings
-	showWarnings  bool                    // Whether to show warnings
-	statusMsg     string                  // Temporary status message
+	columns          []string                // Column names from config
+	tasks            map[string][]*task.Task // Tasks grouped by status
+	cursor           Cursor                  // Current position
+	width            int                     // Terminal width
+	height           int                     // Terminal height
+	mode             Mode                    // Current mode
+	textInput        textinput.Model         // Text input for new tasks
+	confirmMsg       string                  // Confirmation message
+	confirmAction    func() tea.Cmd          // Action to perform on confirmation
+	warnings         []string                // Startup warnings
+	showWarnings     bool                    // Whether to show warnings
+	statusMsg        string                  // Temporary status message
+	newlyCreatedTask string                  // ID of newly created task to select after reload
 }
 
 // NewBoardModel creates a new board model
@@ -283,15 +284,14 @@ func (m *BoardModel) createTask(title string) tea.Cmd {
 
 	// Create task in first column (TODO)
 	status := m.columns[0]
-	_, err := task.CreateTask(config.TasksDir, title, status)
+	newTask, err := task.CreateTask(config.TasksDir, title, status)
 	if err != nil {
 		m.statusMsg = "Error creating task: " + err.Error()
 		return nil
 	}
 
-	// Move cursor to first column
-	m.cursor.Column = 0
-	m.cursor.Row = 0
+	// Store the ID of the newly created task so we can select it after reload
+	m.newlyCreatedTask = newTask.ID
 	m.statusMsg = "Task created"
 
 	return m.reloadTasks()
@@ -346,8 +346,30 @@ func (m *BoardModel) handleReload(msg reloadMsg) {
 		m.tasks[t.Status] = append(m.tasks[t.Status], t)
 	}
 
-	// Adjust cursor if needed
-	m.adjustCursorRow()
+	// If there's a newly created task, find and select it
+	if m.newlyCreatedTask != "" {
+		found := false
+		for colIdx, columnName := range m.columns {
+			tasksInColumn := m.tasks[columnName]
+			for rowIdx, t := range tasksInColumn {
+				if t.ID == m.newlyCreatedTask {
+					// Found the newly created task, select it
+					m.cursor.Column = colIdx
+					m.cursor.Row = rowIdx
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		// Clear the newly created task ID
+		m.newlyCreatedTask = ""
+	} else {
+		// Adjust cursor if needed (normal reload without task creation)
+		m.adjustCursorRow()
+	}
 }
 
 // GetSelectedTask returns the currently selected task, or nil if none
@@ -364,6 +386,11 @@ func (m BoardModel) GetSelectedTask() *task.Task {
 	}
 
 	return tasksInColumn[m.cursor.Row]
+}
+
+// IsNormalMode returns whether the board is in normal mode
+func (m BoardModel) IsNormalMode() bool {
+	return m.mode == ModeNormal
 }
 
 // renderTask renders a single task with appropriate styling

@@ -81,9 +81,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateBoard handles updates when board view is active
 func (m AppModel) updateBoard(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Check for Enter key to switch to detail view
+	// Check for Enter key to switch to detail view (only in normal mode)
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "enter" {
+		if keyMsg.String() == "enter" && m.board.IsNormalMode() {
 			// Get the currently selected task
 			selectedTask := m.board.GetSelectedTask()
 			if selectedTask != nil {

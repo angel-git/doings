@@ -15,21 +15,23 @@ type DetailMode int
 const (
 	DetailModeNormal DetailMode = iota
 	DetailModeInput
+	DetailModeEditDescription
 	DetailModeConfirm
 )
 
 // DetailModel represents the detail view of a task
 type DetailModel struct {
-	task        *task.Task
-	cursor      int // Selected line in checklist (0-indexed)
-	width       int
-	height      int
-	modified    bool            // Has unsaved changes
-	mode        DetailMode      // Current interaction mode
-	textInput   textinput.Model // Text input for new items
-	message     string          // Temporary status message
-	confirmMsg  string          // Confirmation prompt
-	insertBelow bool            // For 'o' vs 'O'
+	task             *task.Task
+	cursor           int // Selected line in checklist (0-indexed)
+	width            int
+	height           int
+	modified         bool            // Has unsaved changes
+	mode             DetailMode      // Current interaction mode
+	textInput        textinput.Model // Text input for new items
+	descriptionInput textinput.Model // Text input for description
+	message          string          // Temporary status message
+	confirmMsg       string          // Confirmation prompt
+	insertBelow      bool            // For 'o' vs 'O'
 }
 
 // NewDetailModel creates a new detail model
@@ -39,14 +41,20 @@ func NewDetailModel(t *task.Task) DetailModel {
 	ti.CharLimit = 200
 	ti.Width = 50
 
+	descInput := textinput.New()
+	descInput.Placeholder = "Task description..."
+	descInput.CharLimit = 1000
+	descInput.Width = 70
+
 	return DetailModel{
-		task:      t,
-		cursor:    0,
-		width:     80,
-		height:    24,
-		modified:  false,
-		mode:      DetailModeNormal,
-		textInput: ti,
+		task:             t,
+		cursor:           0,
+		width:            80,
+		height:           24,
+		modified:         false,
+		mode:             DetailModeNormal,
+		textInput:        ti,
+		descriptionInput: descInput,
 	}
 }
 
@@ -66,6 +74,8 @@ func (m DetailModel) Update(msg tea.Msg) (DetailModel, tea.Cmd) {
 	switch m.mode {
 	case DetailModeInput:
 		return m.updateInput(msg)
+	case DetailModeEditDescription:
+		return m.updateEditDescription(msg)
 	case DetailModeConfirm:
 		return m.updateConfirm(msg)
 	default:
@@ -112,6 +122,11 @@ func (m DetailModel) updateNormal(msg tea.Msg) (DetailModel, tea.Cmd) {
 			// Delete item
 			m.deleteItem()
 
+		case "e":
+			// Edit description
+			m.startEditDescription()
+			return m, textinput.Blink
+
 		case "s":
 			// Save changes
 			return m, m.saveTask()
@@ -149,6 +164,33 @@ func (m DetailModel) updateInput(msg tea.Msg) (DetailModel, tea.Cmd) {
 	}
 
 	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+// updateEditDescription handles description editing mode
+func (m DetailModel) updateEditDescription(msg tea.Msg) (DetailModel, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			// Save the description
+			m.task.Description = m.descriptionInput.Value()
+			m.modified = true
+			m.mode = DetailModeNormal
+			m.descriptionInput.Blur()
+			return m, nil
+
+		case tea.KeyEsc:
+			// Cancel
+			m.mode = DetailModeNormal
+			m.descriptionInput.Blur()
+			return m, nil
+		}
+	}
+
+	m.descriptionInput, cmd = m.descriptionInput.Update(msg)
 	return m, cmd
 }
 
@@ -202,6 +244,14 @@ func (m *DetailModel) startInput() {
 	m.mode = DetailModeInput
 	m.textInput.Reset()
 	m.textInput.Focus()
+	m.message = ""
+}
+
+// startEditDescription starts description editing mode
+func (m *DetailModel) startEditDescription() {
+	m.mode = DetailModeEditDescription
+	m.descriptionInput.SetValue(m.task.Description)
+	m.descriptionInput.Focus()
 	m.message = ""
 }
 
@@ -457,10 +507,12 @@ func (m DetailModel) renderHelp() string {
 	switch m.mode {
 	case DetailModeInput:
 		help = "Enter new item text (Enter to confirm, Esc to cancel):\n" + m.textInput.View()
+	case DetailModeEditDescription:
+		help = "Edit description (Enter to save, Esc to cancel):\n" + m.descriptionInput.View()
 	case DetailModeConfirm:
 		help = m.confirmMsg
 	default:
-		help = "j/k: navigate | Space: toggle | o/O: add | x: delete | s: save | Esc: back"
+		help = "j/k: navigate | Space: toggle | o/O: add | x: delete | e: edit description | s: save | Esc: back"
 		if m.message != "" {
 			help = m.message + " | " + help
 		}
