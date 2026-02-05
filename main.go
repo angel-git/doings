@@ -8,6 +8,7 @@ import (
 	"doings/internal/app"
 	"doings/internal/config"
 	"doings/internal/task"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -52,8 +53,7 @@ func main() {
 	// Create and run the Bubble Tea program with alternate screen
 	p := tea.NewProgram(
 		app.NewAppModel(cfg.Board.Columns, tasks, warnings),
-		tea.WithAltScreen(),       // Use alternate screen buffer
-		tea.WithMouseCellMotion(), // Enable mouse support (optional)
+		tea.WithAltScreen(), // Use alternate screen buffer
 	)
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
