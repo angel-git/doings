@@ -61,7 +61,10 @@ cat .tasks/config.toml
 - `main.go` - Add initialization call
 
 ## Definition of Done
-- [ ] Running app in fresh directory creates `.tasks/`
-- [ ] `config.toml` is created with default columns
-- [ ] User sees message about config creation
-- [ ] Running again doesn't recreate/overwrite existing config
+- [x] Running app in fresh directory creates `.tasks/`
+- [x] `config.toml` is created with default columns
+- [x] User sees message about config creation
+- [x] Running again doesn't recreate/overwrite existing config
+
+## Status
+**COMPLETED** - All tasks finished successfully on Thu Feb 05 2026
