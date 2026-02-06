@@ -41,6 +41,7 @@ type BoardModel struct {
 	showWarnings     bool                    // Whether to show warnings
 	statusMsg        string                  // Temporary status message
 	newlyCreatedTask string                  // ID of newly created task to select after reload
+	lastKeyPress     string                  // Track last key for multi-key sequences like "gg", "dd"
 }
 
 // NewBoardModel creates a new board model
@@ -103,7 +104,36 @@ func (m BoardModel) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.String() {
+		key := msg.String()
+
+		// Handle multi-key sequences
+		switch key {
+		case "g":
+			if m.lastKeyPress == "g" {
+				// gg - Jump to first task
+				m.cursor.Row = 0
+				m.lastKeyPress = ""
+				return m, nil
+			}
+			m.lastKeyPress = "g"
+			return m, nil
+
+		case "d":
+			if m.lastKeyPress == "d" {
+				// dd - Delete task
+				m.lastKeyPress = ""
+				return m, m.confirmDelete()
+			}
+			m.lastKeyPress = "d"
+			return m, nil
+		}
+
+		// Reset multi-key sequence if a different key is pressed
+		if key != m.lastKeyPress {
+			m.lastKeyPress = ""
+		}
+
+		switch key {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
@@ -131,6 +161,14 @@ func (m BoardModel) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor.Row--
 			}
 
+		case "G":
+			// Jump to last task in current column
+			columnName := m.columns[m.cursor.Column]
+			tasksInColumn := m.tasks[columnName]
+			if len(tasksInColumn) > 0 {
+				m.cursor.Row = len(tasksInColumn) - 1
+			}
+
 		case "H":
 			// Move task left
 			return m, m.moveTaskLeft()
@@ -139,16 +177,12 @@ func (m BoardModel) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Move task right
 			return m, m.moveTaskRight()
 
-		case "n":
-			// Create new task
+		case "i", "n":
+			// Create new task (i for insert, n for backward compatibility)
 			m.mode = ModeInput
 			m.textInput.Reset()
 			m.textInput.Focus()
 			return m, textinput.Blink
-
-		case "d":
-			// Delete task
-			return m, m.confirmDelete()
 		}
 
 	case tea.WindowSizeMsg:
@@ -530,7 +564,7 @@ func (m BoardModel) renderHelp() string {
 
 	// Show status message if present
 	if m.statusMsg != "" {
-		return HelpStyle.Render(m.statusMsg + " | hjkl/arrows: navigate | n: new | d: delete | Enter: open | H/L: move | q: quit")
+		return HelpStyle.Render(m.statusMsg + " | hjkl/arrows: navigate | gg/G: first/last | i: new | dd: delete | Enter: open | H/L: move | q: quit")
 	}
 
 	// Check if no tasks exist
@@ -539,10 +573,10 @@ func (m BoardModel) renderHelp() string {
 		totalTasks += len(tasks)
 	}
 	if totalTasks == 0 {
-		return HelpStyle.Render("No tasks yet. Press 'n' to create your first task | q: quit")
+		return HelpStyle.Render("No tasks yet. Press 'i' to create your first task | q: quit")
 	}
 
-	help := "hjkl/arrows: navigate | n: new | d: delete | Enter: open | H/L: move | q: quit"
+	help := "hjkl/arrows: navigate | gg/G: first/last | i: new | dd: delete | Enter: open | H/L: move | q: quit"
 	return HelpStyle.Render(help)
 }
 

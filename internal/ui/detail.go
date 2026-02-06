@@ -32,6 +32,7 @@ type DetailModel struct {
 	message          string          // Temporary status message
 	confirmMsg       string          // Confirmation prompt
 	insertBelow      bool            // For 'o' vs 'O'
+	lastKeyPress     string          // Track last key for multi-key sequences like "gg"
 }
 
 // NewDetailModel creates a new detail model
@@ -91,7 +92,27 @@ func (m DetailModel) updateNormal(msg tea.Msg) (DetailModel, tea.Cmd) {
 		m.height = msg.Height
 
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+
+		// Handle multi-key sequences
+		switch key {
+		case "g":
+			if m.lastKeyPress == "g" {
+				// gg - Jump to first item
+				m.cursor = 0
+				m.lastKeyPress = ""
+				return m, nil
+			}
+			m.lastKeyPress = "g"
+			return m, nil
+		}
+
+		// Reset multi-key sequence if a different key is pressed
+		if key != m.lastKeyPress {
+			m.lastKeyPress = ""
+		}
+
+		switch key {
 		case "j", "down":
 			if len(m.task.Checklist) > 0 && m.cursor < len(m.task.Checklist)-1 {
 				m.cursor++
@@ -101,6 +122,20 @@ func (m DetailModel) updateNormal(msg tea.Msg) (DetailModel, tea.Cmd) {
 			if m.cursor > 0 {
 				m.cursor--
 			}
+
+		case "G":
+			// Jump to last item
+			if len(m.task.Checklist) > 0 {
+				m.cursor = len(m.task.Checklist) - 1
+			}
+
+		case "J":
+			// Move item down
+			m.moveItemDown()
+
+		case "K":
+			// Move item up
+			m.moveItemUp()
 
 		case " ":
 			// Toggle checkbox
@@ -310,6 +345,32 @@ func (m *DetailModel) deleteItem() {
 	m.message = ""
 }
 
+// moveItemDown moves the current checklist item down
+func (m *DetailModel) moveItemDown() {
+	if len(m.task.Checklist) == 0 || m.cursor >= len(m.task.Checklist)-1 {
+		return
+	}
+
+	// Swap current item with the one below
+	m.task.Checklist[m.cursor], m.task.Checklist[m.cursor+1] = m.task.Checklist[m.cursor+1], m.task.Checklist[m.cursor]
+	m.cursor++
+	m.modified = true
+	m.message = ""
+}
+
+// moveItemUp moves the current checklist item up
+func (m *DetailModel) moveItemUp() {
+	if len(m.task.Checklist) == 0 || m.cursor == 0 {
+		return
+	}
+
+	// Swap current item with the one above
+	m.task.Checklist[m.cursor], m.task.Checklist[m.cursor-1] = m.task.Checklist[m.cursor-1], m.task.Checklist[m.cursor]
+	m.cursor--
+	m.modified = true
+	m.message = ""
+}
+
 // saveTask saves the task to disk
 func (m *DetailModel) saveTask() tea.Cmd {
 	return func() tea.Msg {
@@ -512,7 +573,7 @@ func (m DetailModel) renderHelp() string {
 	case DetailModeConfirm:
 		help = m.confirmMsg
 	default:
-		help = "j/k: navigate | Space: toggle | o/O: add | x: delete | e: edit description | s: save | Esc: back"
+		help = "j/k: navigate | gg/G: first/last | Space: toggle | J/K: move up/down | o/O: add | x: delete | e: edit description | s: save | Esc: back"
 		if m.message != "" {
 			help = m.message + " | " + help
 		}

@@ -14,21 +14,27 @@ Navigation
   j/↓              Move down
   k/↑              Move up
   l/→              Move right
+  gg               Jump to first task/item
+  G                Jump to last task/item
   Enter            Open task detail
 
 Board Actions
-  n                Create new task
-  d                Delete task
+  i/n              Create new task
+  dd               Delete task
   H                Move task left
   L                Move task right
   q                Quit application
 
 Detail View
   j/k              Navigate checklist
+  gg/G             Jump to first/last item
   Space            Toggle checkbox
   o                Add item below
   O                Add item above
   x                Delete item
+  J                Move item down
+  K                Move item up
+  e                Edit task description
   s                Save changes
   Esc              Return to board
 
