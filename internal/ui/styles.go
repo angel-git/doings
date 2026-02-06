@@ -5,15 +5,16 @@ import (
 )
 
 var (
-	// Color palette
-	PrimaryColor   = lipgloss.Color("62")  // Teal/purple
-	AccentColor    = lipgloss.Color("205") // Pink
-	SuccessColor   = lipgloss.Color("42")  // Green
-	WarningColor   = lipgloss.Color("208") // Orange
-	ErrorColor     = lipgloss.Color("196") // Red
-	MutedColor     = lipgloss.Color("240") // Gray
-	TextColor      = lipgloss.Color("252") // Light gray
-	HighlightColor = lipgloss.Color("230") // Yellow
+	// Color palette using ANSI colors for light/dark theme compatibility
+	// These colors automatically adapt to the terminal's color scheme
+	PrimaryColor   = lipgloss.AdaptiveColor{Light: "4", Dark: "12"} // Blue (adapts to theme)
+	AccentColor    = lipgloss.AdaptiveColor{Light: "6", Dark: "14"} // Cyan (adapts to theme)
+	SuccessColor   = lipgloss.AdaptiveColor{Light: "2", Dark: "10"} // Green (adapts to theme)
+	WarningColor   = lipgloss.AdaptiveColor{Light: "3", Dark: "11"} // Yellow (adapts to theme)
+	ErrorColor     = lipgloss.AdaptiveColor{Light: "1", Dark: "9"}  // Red (adapts to theme)
+	MutedColor     = lipgloss.AdaptiveColor{Light: "8", Dark: "8"}  // Gray (adapts to theme)
+	TextColor      = lipgloss.AdaptiveColor{Light: "", Dark: ""}    // Default terminal foreground
+	HighlightColor = lipgloss.AdaptiveColor{Light: "5", Dark: "13"} // Magenta (adapts to theme)
 
 	// Column styles
 	ColumnStyle = lipgloss.NewStyle().
@@ -23,12 +24,12 @@ var (
 
 	ColumnTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(AccentColor).
+				Foreground(MutedColor).
 				Align(lipgloss.Center)
 
 	FocusedColumnTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(HighlightColor).
+				Foreground(AccentColor).
 				Align(lipgloss.Center)
 
 	// Task styles
@@ -38,8 +39,8 @@ var (
 
 	SelectedTaskStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Background(PrimaryColor).
-				Foreground(HighlightColor).
+				Background(HighlightColor).
+				Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}).
 				Bold(true)
 
 	// Help/status bar

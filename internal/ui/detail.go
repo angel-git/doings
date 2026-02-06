@@ -459,16 +459,16 @@ func (m DetailModel) View() string {
 func (m DetailModel) renderHeader() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("205")).
+		Foreground(HighlightColor).
 		PaddingLeft(1)
 
 	statusStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("62")).
+		Foreground(PrimaryColor).
 		Bold(true).
 		PaddingRight(1)
 
 	modifiedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("208")).
+		Foreground(WarningColor).
 		Bold(true)
 
 	title := titleStyle.Render("# " + m.task.Title)
@@ -499,7 +499,7 @@ func (m DetailModel) renderHeader() string {
 // renderSeparator renders a horizontal line
 func (m DetailModel) renderSeparator() string {
 	style := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
+		Foreground(MutedColor).
 		PaddingLeft(1)
 
 	separatorWidth := m.width - 2
@@ -515,7 +515,7 @@ func (m DetailModel) renderDescription() string {
 	style := lipgloss.NewStyle().
 		PaddingLeft(1).
 		PaddingRight(1).
-		Foreground(lipgloss.Color("252"))
+		Foreground(TextColor)
 
 	return style.Render(m.task.Description)
 }
@@ -548,14 +548,14 @@ func (m DetailModel) renderChecklistItem(item task.CheckItem, selected bool) str
 
 	if selected {
 		style = style.
-			Background(lipgloss.Color("62")).
-			Foreground(lipgloss.Color("230")).
+			Background(HighlightColor).
+			Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}).
 			Bold(true)
 	}
 
 	// If checked, make it dimmer
 	if item.Checked && !selected {
-		style = style.Foreground(lipgloss.Color("240"))
+		style = style.Foreground(MutedColor)
 	}
 
 	return style.Render(line)
