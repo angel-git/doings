@@ -26,6 +26,11 @@ var (
 				Foreground(AccentColor).
 				Align(lipgloss.Center)
 
+	FocusedColumnTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(HighlightColor).
+				Align(lipgloss.Center)
+
 	// Task styles
 	TaskStyle = lipgloss.NewStyle().
 			Padding(0, 1).

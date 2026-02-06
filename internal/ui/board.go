@@ -455,9 +455,13 @@ func (m BoardModel) renderColumn(colIndex int) string {
 	// Calculate column width based on terminal width
 	columnWidth := m.getColumnWidth()
 
-	// Title with task count
+	// Title with task count - highlight if column is focused
 	titleText := fmt.Sprintf("%s (%d)", columnName, len(tasksInColumn))
-	title := ColumnTitleStyle.Width(columnWidth).Render(titleText)
+	titleStyle := ColumnTitleStyle
+	if colIndex == m.cursor.Column {
+		titleStyle = FocusedColumnTitleStyle
+	}
+	title := titleStyle.Width(columnWidth).Render(titleText)
 
 	// Tasks
 	var taskLines []string
